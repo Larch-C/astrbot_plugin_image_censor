@@ -1,6 +1,6 @@
 from astrbot.api import logger
 from astrbot.api.all import *
-from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 
 import astrbot.api.message_components as Comp
@@ -13,7 +13,7 @@ from pathlib import Path
 _detector = NudeDetector()
 
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
-class CensorImage(Star):
+class ImageCensor(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
@@ -45,7 +45,7 @@ class CensorImage(Star):
         return
 
     @filter.on_decorating_result()
-    async def on_decorating_result(self, event: AstrMessageEvent):
+    async def on_decorating_result(self, event: AstrMessageEvent, result: MessageEventResult):
         """对即将发送的信息进行图片审查"""
         images: list[bytes] = []
         messages = event.get_messages()
