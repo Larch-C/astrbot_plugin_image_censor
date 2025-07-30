@@ -7,38 +7,63 @@ from astrbot.api.star import Context, Star, register
 import aiohttp
 import base64
 import httpx
+import os
 import tempfile
 from nudenet import NudeDetector
 from pathlib import Path
+from urllib.parse import urlparse, unquote
 
 _detector = NudeDetector()
-
-async def ensure_local(seg):
-    s = seg.file
-
-    # 1) data URL / raw base64
-    if s.startswith("base64://") or s[:50].rstrip("=").__len__() > 1000:
-        data = s.split(",", 1)[-1]            # 去掉 schema 头
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        tmp.write(base64.b64decode(data))
-        tmp.close()
-        return tmp.name
-
-    # 2) http(s)
-    if s.startswith("http"):
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(s).suffix or ".jpg")
-        tmp.write((await httpx.AsyncClient().get(s)).content)
-        tmp.close()
-        return tmp.name
-
-    # 3) 已经是本地文件
-    return s
 
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
 class ImageCensor(Star):
     def __init__(self, context: Context):
         super().__init__(context)
     
+    @staticmethod
+    async def download_image(url: str) -> bytes | None:
+        """下载图片"""
+        url = url.replace("https://", "http://")
+        try:
+            async with aiohttp.ClientSession() as client:
+                response = await client.get(url)
+                img_bytes = await response.read()
+                return img_bytes
+        except Exception as e:
+            logger.error(f"图片下载失败: {e}")
+
+    @staticmethod
+    async def ensure_local(seg) -> str | None:
+        """确保图片文件转换到本地，返回本地路径"""
+        s = seg.file
+
+        # 先把 file:// 方案头剥掉
+        if s.startswith("file://"):
+            s = unquote(urlparse(s).path)
+
+        # 1. 已经是本地文件
+        if os.path.isfile(s):
+            return s
+
+        # 2. http/https
+        if s.startswith("http"):
+            suffix = Path(urlparse(s).path).suffix or ".jpg"
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write((await httpx.AsyncClient().get(s)).content)
+            tmp.close()
+            return tmp.name
+
+        # 3. data-URI / 原始 base64
+        # Path 会报 "File name too long"
+        if s.startswith("data:") or len(s) > 1024:
+            _, b64 = s.split(",", 1) if "," in s else ("", s)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+            tmp.write(base64.b64decode(b64))
+            tmp.close()
+            return tmp.name
+
+        raise ValueError(f"无法识别的文件字段: {s[:80]}…")
+
     @filter.command_group("censor")
     def censor(self):
         """图片审查命令组"""
@@ -64,8 +89,7 @@ class ImageCensor(Star):
         async def _process_segment(_seg):
             """处理单个消息段"""
             if isinstance(_seg, Image):
-                logger.info(f"检测到图片")
-                real_path = await ensure_local(_seg)
+                real_path = await self.ensure_local(_seg)
                 if real_path and Path(real_path).is_file():
                     with open(real_path, "rb") as f:
                         img_bytes = f.read()
