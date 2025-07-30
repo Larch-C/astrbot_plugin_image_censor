@@ -1,33 +1,44 @@
 from astrbot.api import logger
 from astrbot.api.all import *
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star, register
 
-import astrbot.api.message_components as Comp
 import aiohttp
 import base64
-
+import httpx
+import tempfile
 from nudenet import NudeDetector
 from pathlib import Path
 
 _detector = NudeDetector()
 
+async def ensure_local(seg):
+    s = seg.file
+
+    # 1) data URL / raw base64
+    if s.startswith("base64://") or s[:50].rstrip("=").__len__() > 1000:
+        data = s.split(",", 1)[-1]            # 去掉 schema 头
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        tmp.write(base64.b64decode(data))
+        tmp.close()
+        return tmp.name
+
+    # 2) http(s)
+    if s.startswith("http"):
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=Path(s).suffix or ".jpg")
+        tmp.write((await httpx.AsyncClient().get(s)).content)
+        tmp.close()
+        return tmp.name
+
+    # 3) 已经是本地文件
+    return s
+
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
 class ImageCensor(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-
-    async def _download_image(url: str) -> bytes | None:
-        """下载图片"""
-        url = url.replace("https://", "http://")
-        try:
-            async with aiohttp.ClientSession() as session:
-                response = await session.get(url)
-                img_bytes = await response.read()
-                return img_bytes
-        except Exception as e:
-            logger.error(f"图片下载失败: {e}")
-
+    
     @filter.command_group("censor")
     def censor(self):
         """图片审查命令组"""
@@ -45,36 +56,22 @@ class ImageCensor(Star):
         return
 
     @filter.on_decorating_result()
-    async def on_decorating_result(self, event: AstrMessageEvent, result: MessageEventResult):
+    async def on_decorating_result(self, event: AstrMessageEvent):
         """对即将发送的信息进行图片审查"""
         images: list[bytes] = []
-        messages = event.get_messages()
+        result = event.get_result()
 
         async def _process_segment(_seg):
             """处理单个消息段"""
-            if isinstance(_seg, Comp.Image):
-                if hasattr(_seg, "url") and _seg.url:
-                    img_url = _seg.url
-                    if Path(img_url).is_file():
-                        with open(img_url, "rb") as img_file:
-                            images.append(img_file.read())
-                    else:
-                        if img_msg := await self._download_image(img_url):
-                            images.append(img_msg)
-                elif hasattr(_seg, "file"):
-                    file_content = _seg.file
-                    if isinstance(file_content, str):
-                        if Path(file_content).is_file():
-                            with open(file_content, "rb") as img_file:
-                                images.append(img_file.read())
-                        else:
-                            if file_content.startswith("base64://"):
-                                file_content = file_content[len("base64://"):]
-                            file_content = base64.b64decode(file_content)
-                    if isinstance(file_content, bytes):
-                        images.append(file_content)
+            if isinstance(_seg, Image):
+                logger.info(f"检测到图片")
+                real_path = await ensure_local(_seg)
+                if real_path and Path(real_path).is_file():
+                    with open(real_path, "rb") as f:
+                        img_bytes = f.read()
+                    images.append(img_bytes)
 
-        for seg in messages:
+        for seg in result.chain:
             await _process_segment(seg)
 
         if len(images) > 0:
