@@ -13,7 +13,7 @@ from nudenet import NudeDetector
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 
-_detector = NudeDetector()
+detector = NudeDetector()
 
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
 class ImageCensor(Star):
@@ -83,22 +83,13 @@ class ImageCensor(Star):
     @filter.on_decorating_result()
     async def on_decorating_result(self, event: AstrMessageEvent):
         """对即将发送的信息进行图片审查"""
-        images: list[bytes] = []
         result = event.get_result()
 
-        async def _process_segment(_seg):
-            """处理单个消息段"""
-            if isinstance(_seg, Image):
-                real_path = await self.ensure_local(_seg)
-                if real_path and Path(real_path).is_file():
-                    with open(real_path, "rb") as f:
-                        img_bytes = f.read()
-                    images.append(img_bytes)
-
         for seg in result.chain:
-            await _process_segment(seg)
-
-        if len(images) > 0:
-            logger.info(f"检测到 {len(images)} 张图片，开始审查...")
-        else:
-            logger.info("没有检测到图片，跳过审查。")
+            """处理单个消息段"""
+            if isinstance(seg, Image):
+                real_path = await self.ensure_local(seg)
+                if real_path and Path(real_path).is_file():
+                    out_path = Path(real_path).with_suffix("_c.jpg")
+                    detector.censor(real_path, out_path=str(out_path))
+                    seg = Image.fromFileSystem(path=str(out_path))
