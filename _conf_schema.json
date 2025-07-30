@@ -1,0 +1,18 @@
+{
+    "exclude_ai": {
+        "description": "排除AI作品",
+        "type": "bool"
+    },
+    "image_size": {
+        "description": "图片质量控制",
+        "type": "string",
+		"options": ["original", "regular", "small", "thumb", "mini"],
+        "default": "original"
+    },
+    "image_info": {
+        "description": "图片信息详细度",
+        "type": "string",
+		"options": ["只有图片", "基本信息", "带标签的基本信息"],
+        "default": "带标签的基本信息"
+    }
+}
