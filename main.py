@@ -5,6 +5,7 @@ from astrbot.api.star import Context, Star, register
 
 import astrbot.api.message_components as Comp
 import aiohttp
+import base64
 
 from nudenet import NudeDetector
 from pathlib import Path
@@ -60,6 +61,18 @@ class CensorImage(Star):
                     else:
                         if img_msg := await self._download_image(img_url):
                             images.append(img_msg)
+                elif hasattr(_seg, "file"):
+                    file_content = _seg.file
+                    if isinstance(file_content, str):
+                        if Path(file_content).is_file():
+                            with open(file_content, "rb") as img_file:
+                                images.append(img_file.read())
+                        else:
+                            if file_content.startswith("base64://"):
+                                file_content = file_content[len("base64://"):]
+                            file_content = base64.b64decode(file_content)
+                    if isinstance(file_content, bytes):
+                        images.append(file_content)
 
         for seg in messages:
             await _process_segment(seg)
