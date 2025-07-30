@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 detector = NudeDetector()
+tempfile_path = "//AstrBot/data/plugins/astrbot_plugin_image_censor/tmp"
 
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
 class ImageCensor(Star):
@@ -48,7 +49,7 @@ class ImageCensor(Star):
         # 2. http/https
         if s.startswith("http"):
             suffix = Path(urlparse(s).path).suffix or ".jpg"
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp = tempfile.NamedTemporaryFile(delete=False, dir=tempfile_path, suffix=suffix)
             tmp.write((await httpx.AsyncClient().get(s)).content)
             tmp.close()
             return tmp.name
@@ -57,7 +58,7 @@ class ImageCensor(Star):
         # Path 会报 "File name too long"
         if s.startswith("data:") or len(s) > 1024:
             _, b64 = s.split(",", 1) if "," in s else ("", s)
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+            tmp = tempfile.NamedTemporaryFile(delete=False, dir=tempfile_path, suffix=".jpg")
             tmp.write(base64.b64decode(b64))
             tmp.close()
             return tmp.name
@@ -85,11 +86,22 @@ class ImageCensor(Star):
         """对即将发送的信息进行图片审查"""
         result = event.get_result()
 
-        for seg in result.chain:
+        for idx, seg in enumerate(result.chain):
             """处理单个消息段"""
             if isinstance(seg, Image):
                 real_path = await self.ensure_local(seg)
                 if real_path and Path(real_path).is_file():
-                    out_path = Path(real_path).with_suffix("_c.jpg")
-                    detector.censor(real_path, out_path=str(out_path))
-                    seg = Image.fromFileSystem(path=str(out_path))
+                    logger.info(f"正在审查图片: {real_path}")
+                    out_path = tempfile_path + "/" + event.message_obj.message_id + "_censored.jpg"
+                    detector.censor(
+                        real_path,
+                        classes=[
+                            "FEMALE_GENITALIA_COVERED",
+                            "FEMALE_BREAST_EXPOSED",
+                            "FEMALE_GENITALIA_EXPOSED",
+                            "MALE_GENITALIA_EXPOSED"
+                        ],
+                        output_path=out_path
+                    )
+                    result.chain[idx] = Image.fromFileSystem(path=out_path)
+                    logger.info(f"图片审查完成，保存到: {out_path}")
