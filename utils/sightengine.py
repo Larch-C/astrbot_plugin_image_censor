@@ -1,18 +1,21 @@
-import requests
-import json
+import aiohttp
 
 
-def request_sightengine(image_full_path: str, api_user: str, api_secret: str) -> dict:
+async def request_sightengine(image_full_path: str, api_user: str, api_secret: str) -> dict:
     """向 Sightengine API 发送图片进行审查"""
     params = {
-    'models': 'nudity-2.1,gore-2.0',
-    'api_user': api_user,
-    'api_secret': api_secret
+        'models': 'nudity-2.1,gore-2.0',
+        'api_user': api_user,
+        'api_secret': api_secret
     }
-    files = {'media': open(image_full_path, 'rb')}
-    r = requests.post('https://api.sightengine.com/1.0/check.json', files=files, data=params)
-
-    return json.loads(r.text)
+    async with aiohttp.ClientSession() as session:
+        with open(image_full_path, 'rb') as f:
+            data = aiohttp.FormData()
+            data.add_field('media', f, filename=image_full_path)
+            for k, v in params.items():
+                data.add_field(k, v)
+            async with session.post('https://api.sightengine.com/1.0/check.json', data=data) as resp:
+                return await resp.json()
 
 """Example response from Sightengine API:
 {

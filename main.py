@@ -4,7 +4,7 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image
 from astrbot.api.star import Context, Star, register
 
-import aiohttp
+import asyncio
 import httpx
 import os
 import tempfile
@@ -56,7 +56,7 @@ class ImageCensor(Star):
         # 3. data-URI / 原始 base64
         # Path 会报 "File name too long"
         if s.startswith(("data:", "base64://")) or len(s) > 1024:
-            yield b64_to_jpeg_file(s, TEMP_DIR)
+            return await b64_to_jpeg_file(s, TEMP_DIR)
 
         raise ValueError(f"无法识别的文件字段: {s[:80]}…")
 
@@ -99,12 +99,12 @@ class ImageCensor(Star):
 
                     # 使用 Sightengine 进行审查
                     if self.censor_model == "sightengine":
-                        response = request_sightengine(origin_path, self.se_api_user, self.se_api_secret)
+                        response = await request_sightengine(origin_path, self.se_api_user, self.se_api_secret)
                         if response.get("status") == "success":
                             # 检查是否 R-18G
                             score_g = response.get("nudity", {}).get("gore", 0)
                             if score_g > 0.5:
-                                blur_image(origin_path, out_path, self.blur_scale)
+                                await blur_image(origin_path, out_path, self.blur_scale)
                                 result.chain[idx] = Image.fromFileSystem(str(out_path))
                                 logger.info(f"图片疑似包含 R-18G 内容 ({score_g})，已模糊处理。")
                             else:
@@ -113,13 +113,13 @@ class ImageCensor(Star):
                                 score_sd = response.get("nudity", {}).get("sexual_display", 0)
                                 score_er = response.get("nudity", {}).get("erotica", 0)
                                 if score_sa > 0.5 or score_sd > 0.5 or score_er > 0.8:
-                                    blur_image(origin_path, out_path, self.blur_scale)
+                                    await blur_image(origin_path, out_path, self.blur_scale)
                                     result.chain[idx] = Image.fromFileSystem(str(out_path))
                                     logger.info(f"图片疑似包含 R-18 内容 ({max(score_sa, score_sd)})，已模糊处理。")
                     
                     # 使用 NudeNet 进行审查
                     elif self.censor_model == "nudenet":
-                        detect_result = detector.detect(origin_path)
+                        detect_result = await asyncio.to_thread(detector.detect, origin_path)
                         for detection in detect_result:
                             if detection.get("class") in [
                                 "FEMALE_BREAST_EXPOSED",
@@ -127,6 +127,7 @@ class ImageCensor(Star):
                                 "ANUS_EXPOSED",
                                 "MALE_GENITALIA_EXPOSED"
                             ]:
-                                blur_image(origin_path, out_path, self.blur_scale)
+                                await blur_image(origin_path, out_path, self.blur_scale)
                                 result.chain[idx] = Image.fromFileSystem(str(out_path))
                                 logger.info(f"图片疑似包含裸露内容，已模糊处理。")
+                                break

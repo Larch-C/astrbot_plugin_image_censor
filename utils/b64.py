@@ -1,10 +1,12 @@
-from PIL import Image
+import asyncio
 import base64
 import io
 import os
 import pathlib
 import tempfile
+from PIL import Image
 from urllib.parse import unquote_to_bytes
+
 
 def strip_b64_header(s: str) -> bytes:
     """准确提取 base64 & URL 解码"""
@@ -25,12 +27,15 @@ def strip_b64_header(s: str) -> bytes:
         s += "=" * (4 - padding)
     return base64.b64decode(s, validate=False)    
 
-def b64_to_jpeg_file(b64str: str, workdir: pathlib.Path) -> str:
+async def b64_to_jpeg_file(b64str: str, workdir: pathlib.Path) -> str:
     """用 Pillow 把任意格式统一转换为 JPEG"""
-    raw = strip_b64_header(b64str)
-    img = Image.open(io.BytesIO(raw))   # Pillow 能读 PNG/WebP/GIF
-    img = img.convert("RGB")            # OpenCV 不支持透明通道
-    fd, out_path = tempfile.mkstemp(dir=workdir, suffix=".jpg")
-    os.close(fd)
-    img.save(out_path, "JPEG", quality=92)
-    return out_path                     # JPEG
+    def sync_b64_to_jpeg_file():
+        raw = strip_b64_header(b64str)
+        img = Image.open(io.BytesIO(raw))   # Pillow 能读 PNG/WebP/GIF
+        img = img.convert("RGB")            # OpenCV 不支持透明通道
+        fd, out_path = tempfile.mkstemp(dir=workdir, suffix=".jpg")
+        os.close(fd)
+        img.save(out_path, "JPEG", quality=92)
+        return out_path                     # JPEG
+
+    return await asyncio.to_thread(sync_b64_to_jpeg_file)
