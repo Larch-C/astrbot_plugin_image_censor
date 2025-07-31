@@ -5,6 +5,22 @@
 		"options": ["nudenet", "sightengine"],
         "default": "nudenet"
     },
+    "sightengine_config": {
+        "description": "Sightengine API 配置",
+        "type": "object",
+        "items": {
+            "api_user": {
+                "description": "Sightengine API 用户名",
+                "type": "string",
+                "default": ""
+            },
+            "api_secret": {
+                "description": "Sightengine API 密钥",
+                "type": "string",
+                "default": ""
+            }
+        }
+    },
     "blur_radius": {
         "description": "模糊半径",
         "type": "int",

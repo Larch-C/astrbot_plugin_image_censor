@@ -28,6 +28,9 @@ class ImageCensor(Star):
         self.config = config
         self.censor_model = self.config.get("censor_model")
         self.blur_radius = self.config.get("blur_radius")
+        self.sightengine_config = self.config.get("sightengine")
+        self.se_api_user = self.sightengine_config.get("api_user")
+        self.se_api_secret = self.sightengine_config.get("api_secret")
     
     @staticmethod
     async def download_image(url: str) -> bytes | None:
@@ -120,7 +123,7 @@ class ImageCensor(Star):
 
                     # 使用 Sightengine 进行审查
                     if self.censor_model == "sightengine":
-                        response = request_sightengine(real_path)
+                        response = request_sightengine(real_path, self.se_api_user, self.se_api_secret)
                         if response.get("status") == "success":
                             # 检查是否 R-18G
                             score_g = response.get("nudity", {}).get("gore", 0)

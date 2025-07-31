@@ -2,12 +2,12 @@ import requests
 import json
 
 
-def request_sightengine(image_full_path: str) -> dict:
+def request_sightengine(image_full_path: str, api_user: str, api_secret: str) -> dict:
     """向 Sightengine API 发送图片进行审查"""
     params = {
     'models': 'nudity-2.1,gore-2.0',
-    'api_user': '1908461751',
-    'api_secret': 'JxmEGZ6tebu7Lo3W5gCJNYxBjqQXYva6'
+    'api_user': api_user,
+    'api_secret': api_secret
     }
     files = {'media': open(image_full_path, 'rb')}
     r = requests.post('https://api.sightengine.com/1.0/check.json', files=files, data=params)
