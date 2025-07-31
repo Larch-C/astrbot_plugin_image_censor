@@ -42,14 +42,14 @@ class ImageCensor(Star):
             logger.error(f"图片下载失败: {e}")
 
     @staticmethod
-    def blur_image(image_path: str, blur_radius: int = 10) -> Path | None:
+    def blur_image(image_path: str, blur_radius: int = 10) -> str | None:
         """模糊图片并暂存至 TEMP_DIR"""
         try:
             img = PILImage.open(image_path)
             blurred_img = img.filter(ImageFilter.GaussianBlur(blur_radius))
             out_path = TEMP_DIR / f"blurred_{Path(image_path).name}"
             blurred_img.save(out_path)
-            return out_path
+            return str(out_path)
         except Exception as e:
             logger.error(f"模糊图片失败: {e}")
             return None
