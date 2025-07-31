@@ -1,6 +1,7 @@
 import requests
 import json
 
+
 def request_sightengine(image_full_path: str) -> dict:
     """向 Sightengine API 发送图片进行审查"""
     params = {

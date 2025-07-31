@@ -4,5 +4,11 @@
         "type": "string",
 		"options": ["nudenet", "sightengine"],
         "default": "nudenet"
+    },
+    "blur_radius": {
+        "description": "模糊半径",
+        "type": "int",
+        "hint": "仅用于 sightengine",
+        "default": 10
     }
 }

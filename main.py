@@ -10,6 +10,7 @@ import os
 import tempfile
 from nudenet import NudeDetector
 from pathlib import Path
+from PIL import Image as PILImage, ImageFilter
 from urllib.parse import urlparse, unquote
 
 from .utils.b64 import b64_to_jpeg_file
@@ -25,7 +26,8 @@ class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config
-        self.censor_model = self.config.get("censor_model", "nudenet")
+        self.censor_model = self.config.get("censor_model")
+        self.blur_radius = self.config.get("blur_radius")
     
     @staticmethod
     async def download_image(url: str) -> bytes | None:
@@ -38,6 +40,19 @@ class ImageCensor(Star):
                 return img_bytes
         except Exception as e:
             logger.error(f"图片下载失败: {e}")
+
+    @staticmethod
+    def blur_image(image_path: str, blur_radius: int = 10) -> Path | None:
+        """模糊图片并暂存至 TEMP_DIR"""
+        try:
+            img = PILImage.open(image_path)
+            blurred_img = img.filter(ImageFilter.GaussianBlur(blur_radius))
+            out_path = TEMP_DIR / f"blurred_{Path(image_path).name}"
+            blurred_img.save(out_path)
+            return out_path
+        except Exception as e:
+            logger.error(f"模糊图片失败: {e}")
+            return None
 
     @staticmethod
     async def ensure_local(seg) -> str | None:
@@ -110,12 +125,19 @@ class ImageCensor(Star):
                             # 检查是否 R-18G
                             score_g = response.get("nudity", {}).get("gore", 0)
                             if score_g > 0.5:
-                                logger.info(f"认定图片包含 R-18G 信息 ({score_g})")
-                            # 检查是否 R-18
-                            score_sa = response.get("nudity", {}).get("sexual_activity", 0)
-                            score_sd = response.get("nudity", {}).get("sexual_display", 0)
-                            if score_sa + score_sd > 0.5:
-                                logger.info(f"认定图片包含 R-18 信息 ({score_sa + score_sd})")
+                                result.chain[idx] = Image.fromFileSystem(
+                                    path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                )
+                                logger.info(f"图片疑似包含 R-18G 内容 ({score_g})，已模糊处理。")
+                            else:
+                                # 检查是否 R-18
+                                score_sa = response.get("nudity", {}).get("sexual_activity", 0)
+                                score_sd = response.get("nudity", {}).get("sexual_display", 0)
+                                if score_sa > 0.5 or score_sd > 0.5:
+                                    result.chain[idx] = Image.fromFileSystem(
+                                        path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                    )
+                                    logger.info(f"图片疑似包含 R-18 内容 ({max(score_sa, score_sd)})，已模糊处理。")
                     
                     # 使用 NudeNet 进行审查
                     elif self.censor_model == "nudenet":
