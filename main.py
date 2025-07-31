@@ -21,16 +21,16 @@ detector = NudeDetector()
 TEMP_DIR = Path("/AstrBot/data/plugins/astrbot_plugin_image_censor/tmp")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "0.2.0")
+@register("image_censor", "Omnisch", "回复结果图片审查", "1.0.0")
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config or {}
-        self.censor_model = self.config.get("censor_model", "nudenet")
-        self.blur_radius = self.config.get("blur_radius", 10)
-        self.sightengine_config = self.config.get("sightengine", {})
-        self.se_api_user = self.sightengine_config.get("api_user", "")
-        self.se_api_secret = self.sightengine_config.get("api_secret", "")
+        self.censor_model = self.config.get("censor_model")
+        self.blur_radius = self.config.get("blur_radius")
+        self.sightengine_config = self.config.get("sightengine_config")
+        self.se_api_user = self.sightengine_config.get("api_user")
+        self.se_api_secret = self.sightengine_config.get("api_secret")
     
     @staticmethod
     async def download_image(url: str) -> bytes | None:
@@ -136,7 +136,8 @@ class ImageCensor(Star):
                                 # 检查是否 R-18
                                 score_sa = response.get("nudity", {}).get("sexual_activity", 0)
                                 score_sd = response.get("nudity", {}).get("sexual_display", 0)
-                                if score_sa > 0.5 or score_sd > 0.5:
+                                score_er = response.get("nudity", {}).get("erotica", 0)
+                                if score_sa > 0.5 or score_sd > 0.5 or score_er > 0.8:
                                     result.chain[idx] = Image.fromFileSystem(
                                         path=self.blur_image(real_path, blur_radius=self.blur_radius)
                                     )
