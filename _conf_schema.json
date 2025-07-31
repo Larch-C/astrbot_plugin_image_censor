@@ -2,6 +2,7 @@
     "censor_model": {
         "description": "审查模型",
         "type": "string",
+        "hint": "nudenet 是轻量本地模型; sightengine 需官网注册并配置 API",
 		"options": ["nudenet", "sightengine"],
         "default": "nudenet"
     },
@@ -10,12 +11,12 @@
         "type": "object",
         "items": {
             "api_user": {
-                "description": "Sightengine API 用户名",
+                "description": "用户名",
                 "type": "string",
                 "default": ""
             },
             "api_secret": {
-                "description": "Sightengine API 密钥",
+                "description": "密钥",
                 "type": "string",
                 "default": ""
             }
@@ -24,7 +25,7 @@
     "blur_radius": {
         "description": "模糊半径",
         "type": "int",
-        "hint": "仅用于 sightengine",
+        "hint": "对需审查的图片做全图高斯模糊",
         "default": 10
     }
 }
