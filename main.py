@@ -10,10 +10,10 @@ import os
 import tempfile
 from nudenet import NudeDetector
 from pathlib import Path
-from PIL import Image as PILImage, ImageFilter
 from urllib.parse import urlparse, unquote
 
 from .utils.b64 import b64_to_jpeg_file
+from .utils.blur import blur_image
 from .utils.sightengine import request_sightengine
 
 
@@ -43,19 +43,6 @@ class ImageCensor(Star):
                 return img_bytes
         except Exception as e:
             logger.error(f"图片下载失败: {e}")
-
-    @staticmethod
-    def blur_image(image_path: str, blur_radius: int = 10) -> str | None:
-        """模糊图片并暂存至 TEMP_DIR"""
-        try:
-            img = PILImage.open(image_path)
-            blurred_img = img.filter(ImageFilter.GaussianBlur(blur_radius))
-            out_path = TEMP_DIR / f"blurred_{Path(image_path).name}"
-            blurred_img.save(out_path)
-            return str(out_path)
-        except Exception as e:
-            logger.error(f"模糊图片失败: {e}")
-            return None
 
     @staticmethod
     async def ensure_local(seg) -> str | None:
@@ -117,19 +104,20 @@ class ImageCensor(Star):
         for idx, seg in enumerate(result.chain):
             # 处理单个消息段
             if isinstance(seg, Image):
-                real_path = await self.ensure_local(seg)
-                if real_path and Path(real_path).is_file():
-                    logger.info(f"正在审查图片: {real_path}, 模型: {self.censor_model}")
+                origin_path = await self.ensure_local(seg)
+                out_path = TEMP_DIR / f"blurred_{Path(origin_path).name}"
+                if origin_path and Path(origin_path).is_file():
+                    logger.info(f"正在审查图片: {origin_path}, 模型: {self.censor_model}")
 
                     # 使用 Sightengine 进行审查
                     if self.censor_model == "sightengine":
-                        response = request_sightengine(real_path, self.se_api_user, self.se_api_secret)
+                        response = request_sightengine(origin_path, self.se_api_user, self.se_api_secret)
                         if response.get("status") == "success":
                             # 检查是否 R-18G
                             score_g = response.get("nudity", {}).get("gore", 0)
                             if score_g > 0.5:
                                 result.chain[idx] = Image.fromFileSystem(
-                                    path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                    path=blur_image(origin_path, out_path)
                                 )
                                 logger.info(f"图片疑似包含 R-18G 内容 ({score_g})，已模糊处理。")
                             else:
@@ -139,13 +127,13 @@ class ImageCensor(Star):
                                 score_er = response.get("nudity", {}).get("erotica", 0)
                                 if score_sa > 0.5 or score_sd > 0.5 or score_er > 0.8:
                                     result.chain[idx] = Image.fromFileSystem(
-                                        path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                        path=blur_image(origin_path, out_path)
                                     )
                                     logger.info(f"图片疑似包含 R-18 内容 ({max(score_sa, score_sd)})，已模糊处理。")
                     
                     # 使用 NudeNet 进行审查
                     elif self.censor_model == "nudenet":
-                        detect_result = detector.detect(real_path)
+                        detect_result = detector.detect(origin_path)
                         for detection in detect_result:
                             if detection.get("class") in [
                                 "FEMALE_BREAST_EXPOSED",
@@ -154,6 +142,6 @@ class ImageCensor(Star):
                                 "MALE_GENITALIA_EXPOSED"
                             ]:
                                 result.chain[idx] = Image.fromFileSystem(
-                                    path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                    path=blur_image(origin_path, out_path)
                                 )
                                 logger.info(f"图片疑似包含裸露内容，已模糊处理。")
