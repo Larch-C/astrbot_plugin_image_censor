@@ -141,16 +141,15 @@ class ImageCensor(Star):
                     
                     # 使用 NudeNet 进行审查
                     elif self.censor_model == "nudenet":
-                        out_path = str(TEMP_DIR) + "/" + event.message_obj.message_id + "_censored.jpg"
-                        detector.censor(
-                            real_path,
-                            classes=[
-                                "FEMALE_GENITALIA_COVERED",
+                        detect_result = detector.detect(real_path)
+                        for detection in detect_result:
+                            if detection.get("class") in [
                                 "FEMALE_BREAST_EXPOSED",
                                 "FEMALE_GENITALIA_EXPOSED",
+                                "ANUS_EXPOSED",
                                 "MALE_GENITALIA_EXPOSED"
-                            ],
-                            output_path=out_path
-                        )
-                        result.chain[idx] = Image.fromFileSystem(path=out_path)
-                        logger.info(f"图片审查完成，保存到: {out_path}")
+                            ]:
+                                result.chain[idx] = Image.fromFileSystem(
+                                    path=self.blur_image(real_path, blur_radius=self.blur_radius)
+                                )
+                                logger.info(f"图片疑似包含裸露内容，已模糊处理。")
