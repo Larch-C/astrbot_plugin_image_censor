@@ -2,7 +2,7 @@ from astrbot.api import logger
 from astrbot.api.all import *
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.message_components import Image
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star, StarTools, register
 
 import asyncio
 import httpx
@@ -18,10 +18,8 @@ from .utils.sightengine import request_sightengine
 
 
 detector = NudeDetector()
-TEMP_DIR = Path("/AstrBot/data/plugins/astrbot_plugin_image_censor/tmp")
-TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "1.0.0")
+@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.0")
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -32,10 +30,10 @@ class ImageCensor(Star):
         self.se_api_user = self.sightengine_config.get("api_user")
         self.se_api_secret = self.sightengine_config.get("api_secret")
         
-        self.temp_paths: list[Path] = []
+        self.tmp_dir = StarTools.get_data_dir()
+        self.tmp_files: list[Path] = []
 
-    @staticmethod
-    async def ensure_local(seg) -> str | None:
+    async def ensure_local(self, seg) -> str | None:
         """确保图片文件转换到本地，返回本地路径"""
         s = seg.file
 
@@ -50,7 +48,7 @@ class ImageCensor(Star):
         # 2. http/https
         if s.startswith("http"):
             suffix = Path(urlparse(s).path).suffix or ".jpg"
-            tmp = tempfile.NamedTemporaryFile(delete=False, dir=TEMP_DIR, suffix=suffix)
+            tmp = tempfile.NamedTemporaryFile(delete=False, dir=self.tmp_dir, suffix=suffix)
             tmp.write((await httpx.AsyncClient().get(s)).content)
             tmp.close()
             return tmp.name
@@ -58,7 +56,7 @@ class ImageCensor(Star):
         # 3. data-URI / 原始 base64
         # Path 会报 "File name too long"
         if s.startswith(("data:", "base64://")) or len(s) > 1024:
-            return await b64_to_jpeg_file(s, TEMP_DIR)
+            return await b64_to_jpeg_file(s, self.tmp_dir)
 
         raise ValueError(f"无法识别的文件字段: {s[:80]}…")
 
@@ -87,10 +85,10 @@ class ImageCensor(Star):
             # 处理单个消息段
             if isinstance(seg, Image):
                 origin_path = await self.ensure_local(seg)
-                out_path = TEMP_DIR / f"blurred_{Path(origin_path).name}"
+                out_path = self.tmp_dir / f"blurred_{Path(origin_path).name}"
                 # 用于发送消息后清理临时文件
-                self.temp_paths.append(Path(origin_path))
-                self.temp_paths.append(out_path)
+                self.tmp_files.append(Path(origin_path))
+                self.tmp_files.append(out_path)
 
                 if origin_path and Path(origin_path).is_file():
                     logger.info(f"正在审查图片: {origin_path}, 模型: {self.censor_model}")
@@ -132,8 +130,8 @@ class ImageCensor(Star):
 
     @filter.after_message_sent()
     async def after_message_sent(self, event: AstrMessageEvent):
-        for temp_path in self.temp_paths:
-            if temp_path.is_file():
-                temp_path.unlink()
+        for path in self.tmp_files:
+            if path.is_file():
+                path.unlink()
         
-        self.temp_paths.clear()
+        self.tmp_files.clear()
