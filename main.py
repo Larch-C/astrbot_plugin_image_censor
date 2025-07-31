@@ -25,12 +25,12 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
-        self.config = config
-        self.censor_model = self.config.get("censor_model")
-        self.blur_radius = self.config.get("blur_radius")
-        self.sightengine_config = self.config.get("sightengine")
-        self.se_api_user = self.sightengine_config.get("api_user")
-        self.se_api_secret = self.sightengine_config.get("api_secret")
+        self.config = config or {}
+        self.censor_model = self.config.get("censor_model", "nudenet")
+        self.blur_radius = self.config.get("blur_radius", 10)
+        self.sightengine_config = self.config.get("sightengine", {})
+        self.se_api_user = self.sightengine_config.get("api_user", "")
+        self.se_api_secret = self.sightengine_config.get("api_secret", "")
     
     @staticmethod
     async def download_image(url: str) -> bytes | None:
