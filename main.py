@@ -31,6 +31,8 @@ class ImageCensor(Star):
         self.sightengine_config = self.config.get("sightengine_config")
         self.se_api_user = self.sightengine_config.get("api_user")
         self.se_api_secret = self.sightengine_config.get("api_secret")
+        
+        self.temp_paths: list[Path] = []
 
     @staticmethod
     async def ensure_local(seg) -> str | None:
@@ -81,19 +83,15 @@ class ImageCensor(Star):
         """对即将发送的信息进行图片审查"""
         result = event.get_result()
 
-        # 清空 TEMP_DIR 中的旧文件
-        for tmp_file in TEMP_DIR.glob("*"):
-            try:
-                if tmp_file.is_file():
-                    tmp_file.unlink()
-            except Exception as e:
-                logger.error(f"清理临时文件失败: {e}")
-
         for idx, seg in enumerate(result.chain):
             # 处理单个消息段
             if isinstance(seg, Image):
                 origin_path = await self.ensure_local(seg)
                 out_path = TEMP_DIR / f"blurred_{Path(origin_path).name}"
+                # 用于发送消息后清理临时文件
+                self.temp_paths.append(Path(origin_path))
+                self.temp_paths.append(out_path)
+
                 if origin_path and Path(origin_path).is_file():
                     logger.info(f"正在审查图片: {origin_path}, 模型: {self.censor_model}")
 
@@ -131,3 +129,11 @@ class ImageCensor(Star):
                                 result.chain[idx] = Image.fromFileSystem(str(out_path))
                                 logger.info(f"图片疑似包含裸露内容，已模糊处理。")
                                 break
+
+    @filter.after_message_sent()
+    async def after_message_sent(self, event: AstrMessageEvent):
+        for temp_path in self.temp_paths:
+            if temp_path.is_file():
+                temp_path.unlink()
+        
+        self.temp_paths.clear()
