@@ -22,10 +22,10 @@
             }
         }
     },
-    "blur_radius": {
-        "description": "模糊半径",
+    "blur_scale": {
+        "description": "模糊比例",
         "type": "int",
-        "hint": "对需审查的图片做全图高斯模糊",
-        "default": 10
+        "hint": "对需审查的图片做全图高斯模糊, scale 越小模糊程度越高，默认 20",
+        "default": 20
     }
 }

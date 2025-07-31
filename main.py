@@ -27,7 +27,7 @@ class ImageCensor(Star):
         super().__init__(context)
         self.config = config or {}
         self.censor_model = self.config.get("censor_model")
-        self.blur_radius = self.config.get("blur_radius")
+        self.blur_scale = self.config.get("blur_scale")
         self.sightengine_config = self.config.get("sightengine_config")
         self.se_api_user = self.sightengine_config.get("api_user")
         self.se_api_secret = self.sightengine_config.get("api_secret")
@@ -116,9 +116,8 @@ class ImageCensor(Star):
                             # 检查是否 R-18G
                             score_g = response.get("nudity", {}).get("gore", 0)
                             if score_g > 0.5:
-                                result.chain[idx] = Image.fromFileSystem(
-                                    path=blur_image(origin_path, out_path)
-                                )
+                                blur_image(origin_path, out_path, self.blur_scale)
+                                result.chain[idx] = Image.fromFileSystem(str(out_path))
                                 logger.info(f"图片疑似包含 R-18G 内容 ({score_g})，已模糊处理。")
                             else:
                                 # 检查是否 R-18
@@ -126,9 +125,8 @@ class ImageCensor(Star):
                                 score_sd = response.get("nudity", {}).get("sexual_display", 0)
                                 score_er = response.get("nudity", {}).get("erotica", 0)
                                 if score_sa > 0.5 or score_sd > 0.5 or score_er > 0.8:
-                                    result.chain[idx] = Image.fromFileSystem(
-                                        path=blur_image(origin_path, out_path)
-                                    )
+                                    blur_image(origin_path, out_path, self.blur_scale)
+                                    result.chain[idx] = Image.fromFileSystem(str(out_path))
                                     logger.info(f"图片疑似包含 R-18 内容 ({max(score_sa, score_sd)})，已模糊处理。")
                     
                     # 使用 NudeNet 进行审查
@@ -141,7 +139,6 @@ class ImageCensor(Star):
                                 "ANUS_EXPOSED",
                                 "MALE_GENITALIA_EXPOSED"
                             ]:
-                                result.chain[idx] = Image.fromFileSystem(
-                                    path=blur_image(origin_path, out_path)
-                                )
+                                blur_image(origin_path, out_path, self.blur_scale)
+                                result.chain[idx] = Image.fromFileSystem(str(out_path))
                                 logger.info(f"图片疑似包含裸露内容，已模糊处理。")
