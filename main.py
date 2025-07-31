@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 from .utils.b64 import b64_to_jpeg_file
+from .utils.sightengine import request_sightengine
 
 
 detector = NudeDetector()
@@ -21,8 +22,10 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 @register("image_censor", "Omnisch", "回复结果图片审查", "0.2.0")
 class ImageCensor(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: dict):
         super().__init__(context)
+        self.config = config
+        self.censor_model = self.config.get("censor_model", "nudenet")
     
     @staticmethod
     async def download_image(url: str) -> bytes | None:
@@ -98,17 +101,34 @@ class ImageCensor(Star):
             if isinstance(seg, Image):
                 real_path = await self.ensure_local(seg)
                 if real_path and Path(real_path).is_file():
-                    logger.info(f"正在审查图片: {real_path}")
-                    out_path = str(TEMP_DIR) + "/" + event.message_obj.message_id + "_censored.jpg"
-                    detector.censor(
-                        real_path,
-                        classes=[
-                            "FEMALE_GENITALIA_COVERED",
-                            "FEMALE_BREAST_EXPOSED",
-                            "FEMALE_GENITALIA_EXPOSED",
-                            "MALE_GENITALIA_EXPOSED"
-                        ],
-                        output_path=out_path
-                    )
-                    result.chain[idx] = Image.fromFileSystem(path=out_path)
-                    logger.info(f"图片审查完成，保存到: {out_path}")
+                    logger.info(f"正在审查图片: {real_path}, 模型: {self.censor_model}")
+
+                    # 使用 Sightengine 进行审查
+                    if self.censor_model == "sightengine":
+                        response = request_sightengine(real_path)
+                        if response.get("status") == "success":
+                            # 检查是否 R-18G
+                            score_g = response.get("nudity", {}).get("gore", 0)
+                            if score_g > 0.5:
+                                logger.info(f"认定图片包含 R-18G 信息 ({score_g})")
+                            # 检查是否 R-18
+                            score_sa = response.get("nudity", {}).get("sexual_activity", 0)
+                            score_sd = response.get("nudity", {}).get("sexual_display", 0)
+                            if score_sa + score_sd > 0.5:
+                                logger.info(f"认定图片包含 R-18 信息 ({score_sa + score_sd})")
+                    
+                    # 使用 NudeNet 进行审查
+                    elif self.censor_model == "nudenet":
+                        out_path = str(TEMP_DIR) + "/" + event.message_obj.message_id + "_censored.jpg"
+                        detector.censor(
+                            real_path,
+                            classes=[
+                                "FEMALE_GENITALIA_COVERED",
+                                "FEMALE_BREAST_EXPOSED",
+                                "FEMALE_GENITALIA_EXPOSED",
+                                "MALE_GENITALIA_EXPOSED"
+                            ],
+                            output_path=out_path
+                        )
+                        result.chain[idx] = Image.fromFileSystem(path=out_path)
+                        logger.info(f"图片审查完成，保存到: {out_path}")
