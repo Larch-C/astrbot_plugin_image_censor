@@ -31,18 +31,6 @@ class ImageCensor(Star):
         self.sightengine_config = self.config.get("sightengine_config")
         self.se_api_user = self.sightengine_config.get("api_user")
         self.se_api_secret = self.sightengine_config.get("api_secret")
-    
-    @staticmethod
-    async def download_image(url: str) -> bytes | None:
-        """下载图片"""
-        url = url.replace("https://", "http://")
-        try:
-            async with aiohttp.ClientSession() as client:
-                response = await client.get(url)
-                img_bytes = await response.read()
-                return img_bytes
-        except Exception as e:
-            logger.error(f"图片下载失败: {e}")
 
     @staticmethod
     async def ensure_local(seg) -> str | None:
@@ -68,7 +56,7 @@ class ImageCensor(Star):
         # 3. data-URI / 原始 base64
         # Path 会报 "File name too long"
         if s.startswith(("data:", "base64://")) or len(s) > 1024:
-            return b64_to_jpeg_file(s, TEMP_DIR)
+            yield b64_to_jpeg_file(s, TEMP_DIR)
 
         raise ValueError(f"无法识别的文件字段: {s[:80]}…")
 
