@@ -19,7 +19,7 @@ detector = NudeDetector()
 TEMP_DIR = Path("/AstrBot/data/plugins/astrbot_plugin_image_censor/tmp")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "0.1.0")
+@register("image_censor", "Omnisch", "回复结果图片审查", "0.2.0")
 class ImageCensor(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -85,8 +85,16 @@ class ImageCensor(Star):
         """对即将发送的信息进行图片审查"""
         result = event.get_result()
 
+        # 清空 TEMP_DIR 中的旧文件
+        for tmp_file in TEMP_DIR.glob("*"):
+            try:
+                if tmp_file.is_file():
+                    tmp_file.unlink()
+            except Exception as e:
+                logger.error(f"清理临时文件失败: {e}")
+
         for idx, seg in enumerate(result.chain):
-            """处理单个消息段"""
+            # 处理单个消息段
             if isinstance(seg, Image):
                 real_path = await self.ensure_local(seg)
                 if real_path and Path(real_path).is_file():
