@@ -1,6 +1,6 @@
 name: astrbot_plugin_image_censor
 desc: Astrbot 图片审查插件
 help: 输入 /censor help 以查看帮助
-version: v1.1.0
+version: v1.1.1
 author: Omnisch
 repo: https://github.com/Omnisch/astrbot_plugin_image_censor

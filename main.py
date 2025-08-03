@@ -19,7 +19,7 @@ from .utils.sightengine import request_sightengine
 
 detector = NudeDetector()
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.0")
+@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.1")
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -130,6 +130,7 @@ class ImageCensor(Star):
 
     @filter.after_message_sent()
     async def after_message_sent(self, event: AstrMessageEvent):
+        """清理临时文件"""
         for path in self.tmp_files:
             if path.is_file():
                 path.unlink()
