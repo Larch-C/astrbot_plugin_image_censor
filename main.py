@@ -19,7 +19,7 @@ from .utils.sightengine import request_sightengine
 
 detector = NudeDetector()
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.1")
+@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.2")
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)

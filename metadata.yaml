@@ -1,6 +1,6 @@
 name: astrbot_plugin_image_censor
-desc: Astrbot 图片审查插件
+desc: 图片审查插件，为机器人回复中可能出现的成人内容图像打码，使顺利发送原本可能违规或被屏蔽的消息。
 help: 输入 /censor help 以查看帮助
-version: v1.1.1
+version: v1.1.2
 author: Omnisch
 repo: https://github.com/Omnisch/astrbot_plugin_image_censor
