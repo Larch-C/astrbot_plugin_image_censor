@@ -19,13 +19,15 @@ from .utils.sightengine import request_sightengine
 
 detector = NudeDetector()
 
-@register("image_censor", "Omnisch", "回复结果图片审查", "1.1.2")
+@register("image_censor", "Omnisch", "回复结果图片审查", "1.2.0")
 class ImageCensor(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config or {}
         self.censor_model = self.config.get("censor_model")
         self.blur_scale = self.config.get("blur_scale")
+        self.whitelist = self.config.get("whitelist")
+
         self.sightengine_config = self.config.get("sightengine_config")
         self.se_api_user = self.sightengine_config.get("api_user")
         self.se_api_secret = self.sightengine_config.get("api_secret")
@@ -37,7 +39,7 @@ class ImageCensor(Star):
         """确保图片文件转换到本地，返回本地路径"""
         s = seg.file
 
-        # 先把 file:// 方案头剥掉
+        # 去除 file:// 方案头
         if s.startswith("file://"):
             s = unquote(urlparse(s).path)
 
@@ -79,6 +81,16 @@ class ImageCensor(Star):
     @filter.on_decorating_result()
     async def on_decorating_result(self, event: AstrMessageEvent):
         """对即将发送的信息进行图片审查"""
+        # 忽略白名单中的对话 ID
+        if event.is_private_chat():
+            sender_id = event.get_sender_id()
+            if sender_id in self.whitelist:
+                return
+        else:
+            group_id = event.get_group_id()
+            if group_id in self.whitelist:
+                return
+
         result = event.get_result()
 
         for idx, seg in enumerate(result.chain):

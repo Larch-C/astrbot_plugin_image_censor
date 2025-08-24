@@ -27,5 +27,10 @@
         "type": "int",
         "hint": "对需审查的图片做全图高斯模糊, scale 越小模糊程度越高，默认 20",
         "default": 20
+    },
+    "whitelist": {
+        "description": "允许跳过审查的对话 ID 名单",
+        "type": "list",
+        "default": []
     }
 }
